@@ -1,0 +1,56 @@
+services:
+  api:
+    build:
+      context: ./api
+      args:
+        BUILD_NUMBER: ${BUILD_NUMBER:-local}
+        GIT_COMMIT: ${GIT_COMMIT:-local}
+    networks:
+      - application_internal
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(async response => { const body = await response.json(); if (!response.ok || body.status !== 'ok') process.exit(1); }).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  web:
+    build:
+      context: ./web
+      args:
+        BUILD_NUMBER: ${BUILD_NUMBER:-local}
+        GIT_COMMIT: ${GIT_COMMIT:-local}
+    environment:
+      API_BASE_URL: http://api:3000
+    ports:
+      - "8080:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - application_internal
+      - web_edge
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(async response => { const body = await response.json(); if (!response.ok || body.status !== 'ok') process.exit(1); }).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  integration:
+    profiles: ["test"]
+    build:
+      context: ./integration-tests
+    environment:
+      WEB_URL: http://web:3000
+    depends_on:
+      web:
+        condition: service_healthy
+    networks:
+      - web_edge
+    restart: "no"
+
+networks:
+  application_internal:
+    internal: true
+  web_edge: {}

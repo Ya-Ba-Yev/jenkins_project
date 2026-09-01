@@ -1,0 +1,20 @@
+# Local course environment only. Do not expose this controller to untrusted networks.
+services:
+  jenkins:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: jenkins-course-local:2.568.2-jdk21
+    # Docker Desktop exposes this socket as root-only; runtime root is required
+    # here for the mounted socket and is not a replacement for its risk review.
+    user: "0:0"
+    ports:
+      - "127.0.0.1:9090:8080"
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+
+volumes:
+  jenkins_home:
+    name: jenkins_course_home

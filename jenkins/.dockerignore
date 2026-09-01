@@ -1,0 +1,4 @@
+# Keep local runtime state and unnecessary metadata out of the image build context.
+.git/
+jenkins_home/
+*.log

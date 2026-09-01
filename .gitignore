@@ -1,0 +1,8 @@
+node_modules/
+coverage/
+.env
+.env.*
+!.env.example
+
+# Optional local Jenkins bind-mounted runtime state (the supplied Compose uses a named volume).
+jenkins/jenkins_home/
