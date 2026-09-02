@@ -27,7 +27,17 @@ pipeline {
                     steps {
                         sh '''#!/usr/bin/env bash
                             set -euo pipefail
-                            docker run --rm -v "$PWD/api:/source:ro" node:22 sh -c 'mkdir -p /app && cp -a /source/package.json /source/package-lock.json /source/src /source/test /app/ && cd /app && npm ci && npm test'
+                            container_id=''
+                            cleanup() {
+                                if [[ -n "$container_id" ]]; then
+                                    docker rm -f "$container_id" >/dev/null 2>&1 || true
+                                fi
+                            }
+                            trap cleanup EXIT
+                            container_id="$(docker create node:22 sh -c 'tail -f /dev/null')"
+                            docker cp "$PWD/api/." "$container_id:/app"
+                            docker start "$container_id" >/dev/null
+                            docker exec "$container_id" sh -c 'cd /app && npm ci && npm test'
                         '''
                     }
                 }
@@ -35,7 +45,17 @@ pipeline {
                     steps {
                         sh '''#!/usr/bin/env bash
                             set -euo pipefail
-                            docker run --rm -v "$PWD/api:/source:ro" node:24 sh -c 'mkdir -p /app && cp -a /source/package.json /source/package-lock.json /source/src /source/test /app/ && cd /app && npm ci && npm test'
+                            container_id=''
+                            cleanup() {
+                                if [[ -n "$container_id" ]]; then
+                                    docker rm -f "$container_id" >/dev/null 2>&1 || true
+                                fi
+                            }
+                            trap cleanup EXIT
+                            container_id="$(docker create node:24 sh -c 'tail -f /dev/null')"
+                            docker cp "$PWD/api/." "$container_id:/app"
+                            docker start "$container_id" >/dev/null
+                            docker exec "$container_id" sh -c 'cd /app && npm ci && npm test'
                         '''
                     }
                 }
@@ -43,7 +63,17 @@ pipeline {
                     steps {
                         sh '''#!/usr/bin/env bash
                             set -euo pipefail
-                            docker run --rm -v "$PWD/web:/source:ro" node:22 sh -c 'mkdir -p /app && cp -a /source/package.json /source/package-lock.json /source/src /source/test /app/ && cd /app && npm ci && npm test'
+                            container_id=''
+                            cleanup() {
+                                if [[ -n "$container_id" ]]; then
+                                    docker rm -f "$container_id" >/dev/null 2>&1 || true
+                                fi
+                            }
+                            trap cleanup EXIT
+                            container_id="$(docker create node:22 sh -c 'tail -f /dev/null')"
+                            docker cp "$PWD/web/." "$container_id:/app"
+                            docker start "$container_id" >/dev/null
+                            docker exec "$container_id" sh -c 'cd /app && npm ci && npm test'
                         '''
                     }
                 }
@@ -51,7 +81,17 @@ pipeline {
                     steps {
                         sh '''#!/usr/bin/env bash
                             set -euo pipefail
-                            docker run --rm -v "$PWD/web:/source:ro" node:24 sh -c 'mkdir -p /app && cp -a /source/package.json /source/package-lock.json /source/src /source/test /app/ && cd /app && npm ci && npm test'
+                            container_id=''
+                            cleanup() {
+                                if [[ -n "$container_id" ]]; then
+                                    docker rm -f "$container_id" >/dev/null 2>&1 || true
+                                fi
+                            }
+                            trap cleanup EXIT
+                            container_id="$(docker create node:24 sh -c 'tail -f /dev/null')"
+                            docker cp "$PWD/web/." "$container_id:/app"
+                            docker start "$container_id" >/dev/null
+                            docker exec "$container_id" sh -c 'cd /app && npm ci && npm test'
                         '''
                     }
                 }
