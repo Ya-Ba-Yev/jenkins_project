@@ -91,6 +91,8 @@ Nginx config test + graceful reload ──▶ route to green     remove green; b
 | Failed `main` candidate/rollback (build 4): Jenkins reports failed health checks and leaves the existing deployment unchanged. | ![Main build 4 deploy failure with no promotion](screenshots/main_build_error_no_deploy.png) |
 | Successful `main` green deployment (build 5): the green candidate is promoted after health checks. | ![Main build 5 after health checks](screenshots/main_build_after_health_ok.png) |
 | Multibranch dashboard: `dev` and `main` branch histories. | ![Multibranch dashboard](screenshots/multibranch_dashboard.png) |
+| Bonus: Jenkins test report showing all 8 tests passing. | ![Jenkins UI test report with all 8 tests passing](screenshots/Test_report_in_jenkins.png) |
+| Bonus: parallel Node.js 22 and Node.js 24 test matrix. | ![Node 22 and 24 parallel test matrix](screenshots/parallel_node_version.png) |
 
 ## Technologies
 
