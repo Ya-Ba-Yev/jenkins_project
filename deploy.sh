@@ -68,7 +68,7 @@ fi
 
 candidate_is_healthy() {
     docker exec "api-$NEW" node -e "fetch('http://127.0.0.1:3000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))" &&
-    docker exec "web-$NEW" node -e "fetch('http://127.0.0.1:3000//health-rollback-demo').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))" &&
+    docker exec "web-$NEW" node -e "fetch('http://127.0.0.1:3000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))" &&
     docker exec "web-$NEW" node -e "fetch('http://127.0.0.1:3000/').then(async r=>{if(!r.ok || !(await r.text()).includes('Hello from the API'))process.exit(1)}).catch(()=>process.exit(1))"
 }
 
