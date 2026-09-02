@@ -27,9 +27,10 @@ trap cleanup EXIT
 command -v docker >/dev/null || fail 'Docker CLI is required.'
 docker info >/dev/null || fail 'Docker daemon is unavailable.'
 
-SHORT_COMMIT="${GIT_COMMIT:0:12}"
-API_IMAGE="message-api:ci-${BUILD_NUMBER}-${SHORT_COMMIT}"
-WEB_IMAGE="message-web:ci-${BUILD_NUMBER}-${SHORT_COMMIT}"
+IMAGE_SHORT_COMMIT="${GIT_COMMIT:0:12}"
+EXPECTED_SHORT_COMMIT="${GIT_COMMIT:0:7}"
+API_IMAGE="message-api:ci-${BUILD_NUMBER}-${IMAGE_SHORT_COMMIT}"
+WEB_IMAGE="message-web:ci-${BUILD_NUMBER}-${IMAGE_SHORT_COMMIT}"
 
 # Jenkins has already built these tags. The fallback also makes local use simple.
 if ! docker image inspect "$API_IMAGE" >/dev/null 2>&1; then
@@ -67,8 +68,14 @@ if ! docker container inspect "$PROXY" >/dev/null 2>&1; then
 fi
 
 candidate_is_healthy() {
-    docker exec "api-$NEW" node -e "fetch('http://127.0.0.1:3000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))" &&
-    docker exec "web-$NEW" node -e "fetch('http://127.0.0.1:3000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))" &&
+    docker exec \
+        -e "EXPECTED_BUILD_NUMBER=$BUILD_NUMBER" \
+        -e "EXPECTED_SHORT_COMMIT=$EXPECTED_SHORT_COMMIT" \
+        "api-$NEW" node -e "fetch('http://127.0.0.1:3000/health').then(async r=>{const body=await r.json();if(!r.ok||body.status!=='ok'||body.build!==process.env.EXPECTED_BUILD_NUMBER||body.commit!==process.env.EXPECTED_SHORT_COMMIT)process.exit(1)}).catch(()=>process.exit(1))" &&
+    docker exec \
+        -e "EXPECTED_BUILD_NUMBER=$BUILD_NUMBER" \
+        -e "EXPECTED_SHORT_COMMIT=$EXPECTED_SHORT_COMMIT" \
+        "web-$NEW" node -e "fetch('http://127.0.0.1:3000/health').then(async r=>{const body=await r.json();if(!r.ok||body.status!=='ok'||body.build!==process.env.EXPECTED_BUILD_NUMBER||body.commit!==process.env.EXPECTED_SHORT_COMMIT)process.exit(1)}).catch(()=>process.exit(1))" &&
     docker exec "web-$NEW" node -e "fetch('http://127.0.0.1:3000/').then(async r=>{if(!r.ok || !(await r.text()).includes('Hello from the API'))process.exit(1)}).catch(()=>process.exit(1))"
 }
 

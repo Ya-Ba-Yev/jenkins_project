@@ -21,6 +21,42 @@ pipeline {
                 '''
             }
         }
+        stage('Node Version Test Matrix') {
+            parallel {
+                stage('API - Node 22') {
+                    steps {
+                        sh '''#!/usr/bin/env bash
+                            set -euo pipefail
+                            docker run --rm -v "$PWD/api:/source:ro" node:22 sh -c 'mkdir -p /app && cp -a /source/package.json /source/package-lock.json /source/src /source/test /app/ && cd /app && npm ci && npm test'
+                        '''
+                    }
+                }
+                stage('API - Node 24') {
+                    steps {
+                        sh '''#!/usr/bin/env bash
+                            set -euo pipefail
+                            docker run --rm -v "$PWD/api:/source:ro" node:24 sh -c 'mkdir -p /app && cp -a /source/package.json /source/package-lock.json /source/src /source/test /app/ && cd /app && npm ci && npm test'
+                        '''
+                    }
+                }
+                stage('Web - Node 22') {
+                    steps {
+                        sh '''#!/usr/bin/env bash
+                            set -euo pipefail
+                            docker run --rm -v "$PWD/web:/source:ro" node:22 sh -c 'mkdir -p /app && cp -a /source/package.json /source/package-lock.json /source/src /source/test /app/ && cd /app && npm ci && npm test'
+                        '''
+                    }
+                }
+                stage('Web - Node 24') {
+                    steps {
+                        sh '''#!/usr/bin/env bash
+                            set -euo pipefail
+                            docker run --rm -v "$PWD/web:/source:ro" node:24 sh -c 'mkdir -p /app && cp -a /source/package.json /source/package-lock.json /source/src /source/test /app/ && cd /app && npm ci && npm test'
+                        '''
+                    }
+                }
+            }
+        }
         stage('Integration Test') {
             steps {
                 sh '''#!/usr/bin/env bash
@@ -47,6 +83,7 @@ pipeline {
         always {
             sh 'WEB_HOST_PORT=18080 docker compose -p jenkins-integration --profile test down || true'
             archiveArtifacts artifacts: 'api/coverage/lcov.info,web/coverage/lcov.info', allowEmptyArchive: true
+            junit testResults: 'api/coverage/junit.xml,web/coverage/junit.xml', allowEmptyResults: true
         }
     }
 }
