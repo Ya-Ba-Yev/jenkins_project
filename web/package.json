@@ -7,7 +7,7 @@
     "start": "node src/server.js",
     "test": "node --test",
     "precoverage": "node -e \"const fs=require('node:fs');fs.rmSync('coverage',{recursive:true,force:true});fs.mkdirSync('coverage',{recursive:true})\"",
-    "coverage": "node --test --experimental-test-coverage --test-coverage-lines=80 --test-coverage-include=src/** --test-reporter=spec --test-reporter=lcov --test-reporter-destination=stdout --test-reporter-destination=coverage/lcov.info"
+    "coverage": "node --test --experimental-test-coverage --test-coverage-lines=80 --test-coverage-include=src/** --test-reporter=spec --test-reporter=lcov --test-reporter=junit --test-reporter-destination=stdout --test-reporter-destination=coverage/lcov.info --test-reporter-destination=coverage/junit.xml && node -e \"const fs=require('node:fs');if(!fs.existsSync('coverage/junit.xml'))throw new Error('JUnit report was not created: coverage/junit.xml')\""
   },
   "engines": {
     "node": ">=24"

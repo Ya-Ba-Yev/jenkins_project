@@ -1,81 +1,109 @@
-# Jenkins Course Assignment
+# Jenkins Two-Service CI/CD Project
 
-This project has a small API and web app. They are separate Docker images. The
-API is on an internal Docker network; the web app calls it at `http://api:3000`.
-Both `/health` endpoints return exactly `status`, `build`, and `commit`.
+A compact CI/CD project for two independent Node.js/Express services: a JSON
+message API and a server-rendered web application that displays the API
+message. Docker isolates the services, Jenkins verifies every branch, and the
+`main` branch uses a blue-green deployment behind a stable Nginx entry point.
 
-## Run tests locally
+## Local two-service architecture
 
-Node.js 24+ and Docker Compose are required.
+The web service is the only local host-facing application. It resolves `api`
+over the Compose application network; the API is not published directly to the
+host. An integration-test container exercises the same web-to-API path.
 
-```powershell
-Set-Location api; npm ci; npm run coverage
-Set-Location ..\web; npm ci; npm run coverage
-Set-Location ..
-docker compose --profile test up --build --abort-on-container-exit --exit-code-from integration
-docker compose --profile test down
+```text
+                         Docker Compose application network
+┌──────────────┐        ┌──────────────────┐        ┌──────────────────┐
+│ Host browser │───────▶│ web              │───────▶│ api              │
+│ localhost:   │ :8080  │ renders HTML     │ :3000  │ GET /api/message │
+│ 8080         │        │ GET /health      │        │ GET /health      │
+└──────────────┘        └──────────────────┘        └──────────────────┘
+                                  ▲
+                                  │ separate edge network
+                         ┌────────┴─────────┐
+                         │ integration test │
+                         │ verifies HTML    │
+                         └──────────────────┘
 ```
 
-Coverage must be at least 80%. The integration test makes a real request from
-the web service to the API and checks for `Hello from the API`.
+## Jenkins delivery flow
 
-To run the application stack:
+Both branches run the same verification and image-build stages. `dev` stops
+after CI; `main` continues to deployment. Coverage is collected per service
+with an 80% line-coverage threshold; the native Node.js test runner keeps its
+human-readable console output while writing LCOV artifacts and JUnit XML
+(`coverage/junit.xml`) for Jenkins test-result publishing. After the coverage
+gate, a bonus matrix runs each service's standard tests on both Node.js 22 and
+Node.js 24 Docker images. The matrix is additional compatibility evidence; it
+does not replace the Node.js 24 coverage gate on the Jenkins agent.
 
-```powershell
-$env:BUILD_NUMBER = '42'
-$env:GIT_COMMIT = 'abcdef0123456789'
-docker compose up -d --build
-Invoke-RestMethod http://127.0.0.1:8080/health
-docker compose down
+```text
+dev  ──▶ Checkout ──▶ Install & Test ──▶ Node Version Test Matrix ──▶ Integration Test ──▶ Build Images ──▶ CI complete
+
+main ──▶ Checkout ──▶ Install & Test ──▶ Node Version Test Matrix ──▶ Integration Test ──▶ Build Images ──▶ Deploy ──▶ Live
+                                                                                                   │
+                                                                                                   └── deploy stage runs only on main
 ```
 
-Expected health response: `{"status":"ok","build":"42","commit":"abcdef0"}`.
-The web host port defaults to `8080`; set `WEB_HOST_PORT` (for example,
-`$env:WEB_HOST_PORT = '18080'`) before running Compose to use another local port.
+## Blue-green deployment flow
 
-## Jenkins
+Nginx remains the fixed public entry point on port 8080. Each color is a
+matched API/web pair on the blue-green network, and a web container calls only
+its same-color API. A candidate is promoted only after API and web health JSON
+responses each report `status: "ok"`, the exact Jenkins build number, and the
+first seven characters of the exact Jenkins commit. Rendered-content and Nginx
+configuration checks must also succeed.
 
-Start the supplied local Jenkins environment:
-
-```powershell
-Set-Location jenkins
-docker compose up -d --build
-docker compose exec jenkins cat /var/jenkins_home/secrets/initialAdminPassword
+```text
+                                ┌──────────────────────────────────────────┐
+Client ──▶ :8080 ──▶ Nginx ───▶│ active upstream: web-blue ─▶ api-blue     │
+                                └──────────────────────────────────────────┘
+                                              │
+                                              │ start inactive candidate
+                                              ▼
+                                ┌──────────────────────────────────────────┐
+                                │ candidate: web-green ─────▶ api-green     │
+                                │ JSON health metadata + rendered page      │
+                                └──────────────────────────────────────────┘
+                                              │
+                         checks pass          │          any check fails
+                              ▼               │               ▼
+Nginx config test + graceful reload ──▶ route to green     remove green; blue stays live
+                              │
+                        reload fails
+                              ▼
+               restore blue upstream where possible; remove candidate; fail deploy
+                              │
+                        reload succeeds
+                              ▼
+                    remove old blue pair; green is active
 ```
 
-Open `http://127.0.0.1:9090/`, create a Multibranch Pipeline, select this
-repository, and scan branches. Jenkins uses the `linux-docker-node24` label.
+## Evidence
 
-Both `dev` and `main` run checkout, `npm ci`, coverage, the Compose integration
-test, and separate API/web image builds. Only `main` runs `deploy.sh`. Coverage
-reports are archived when available.
+| Evidence | Screenshot |
+| --- | --- |
+| `dev` pipeline: Deploy is skipped while CI stages succeed. | ![Dev pipeline with skipped Deploy stage](screenshots/dev_build_pipeline.png) |
+| API coverage report. | ![API coverage](screenshots/api_jenkins_coverage.png) |
+| Web coverage report. | ![Web coverage](screenshots/web_jenkins_coverage.png) |
+| Endpoint replay: initial live endpoint evidence from build 2, showing the public health and rendered-page responses. | ![Replay from initial live endpoints for build 2](screenshots/replay_from_endpoints.png) |
+| Successful `main` blue deployment (build 3): the blue candidate is promoted and the public health/page responses are shown. | ![Main build 3 blue deploy and curl validation](screenshots/main_build_blue_deploy+curl.png) |
+| Failed `main` candidate/rollback (build 4): Jenkins reports failed health checks and leaves the existing deployment unchanged. | ![Main build 4 deploy failure with no promotion](screenshots/main_build_error_no_deploy.png) |
+| Successful `main` green deployment (build 5): the green candidate is promoted after health checks. | ![Main build 5 after health checks](screenshots/main_build_after_health_ok.png) |
+| Multibranch dashboard: `dev` and `main` branch histories. | ![Multibranch dashboard](screenshots/multibranch_dashboard.png) |
 
-## Blue-green deployment
+## Technologies
 
-On the Docker host, run:
+Node.js 24, Express, Docker, Docker Compose, Nginx, Jenkins Multibranch
+Pipeline, Bash, and native Node.js test coverage.
 
-```bash
-BUILD_NUMBER=42 GIT_COMMIT=abcdef0123456789 bash deploy.sh
-curl http://127.0.0.1:8080/
-```
+## Personal Reflection
 
-The first deployment starts the blue pair. Later deployments start the other
-color beside the live pair, check API health, web health, and web-to-API output,
-then update Nginx and gracefully reload it. Only after that switch succeeds is
-the old pair removed. A failed candidate is removed, the old pair remains live,
-and the Jenkins build fails.
-
-### Rollback demonstration
-
-Deploy a working build and keep its browser/curl result. Then make a temporary
-change that makes a candidate health check fail, run `deploy.sh`, and confirm it
-exits nonzero while `curl http://127.0.0.1:8080/` still shows the working version.
-Undo the temporary change and deploy again.
-
-## Submission screenshots
-
-- Jenkins `dev` build: test, integration, and image stages; no deploy stage.
-- Jenkins `main` build: all stages including `Deploy`.
-- Successful API or web `/health` JSON with build and commit values.
-- Browser or curl output containing `Hello from the API`.
-- Failed-candidate build plus the still-working endpoint for the rollback demo.
+The most challenging part of this project for me was implementing the
+blue-green deployment. I learned to keep Nginx fixed on port 8080, start a
+candidate version first, and health-check it before switching traffic to it.
+During the work, I also encountered a port collision between Compose and
+Nginx, which taught me the importance of distinguishing between local
+development/testing ports and Nginx's fixed ingress port. If the candidate
+fails its checks, it is removed while the previous version remains live and
+available to users.
